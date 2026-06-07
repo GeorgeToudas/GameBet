@@ -1,0 +1,11 @@
+{
+  "GameName": "test1",
+  "ProviderName": "provider2",
+  "Stars": 2,
+  "NoOfVotes": 10,
+  "GameLogo": "test1",
+  "MinBet": 1.0,
+  "MaxBet": 10.0,
+  "RiskLevel": "low",
+  "HashKey": "secret2"
+}

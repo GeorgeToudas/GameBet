@@ -1,0 +1,11 @@
+{
+  "GameName": "Lucky7",
+  "ProviderName": "provider1",
+  "Stars": 4,
+  "NoOfVotes": 10,
+  "GameLogo": "lucky7",
+  "MinBet": 1.0,
+  "MaxBet": 10.0,
+  "RiskLevel": "medium",
+  "HashKey": "secret1"
+}
