@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Search Games"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp" />
+
+    <EditText
+        android:id="@+id/etStars"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Minimum stars (1-5)"
+        android:inputType="number"
+        android:layout_marginBottom="12dp" />
+
+    <Spinner
+        android:id="@+id/spinnerRisk"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp" />
+
+    <Spinner
+        android:id="@+id/spinnerBetCategory"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnSearch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Search"
+        android:layout_marginBottom="12dp" />
+
+    <ListView
+        android:id="@+id/listSearchResults"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</LinearLayout>

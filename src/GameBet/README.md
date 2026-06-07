@@ -1,207 +1,246 @@
 # GameBet — Distributed Betting System
 
-A distributed betting platform built entirely in **Java** using raw TCP sockets, implementing a **Master-Worker architecture** with MapReduce aggregation, consistent-hash routing, a dedicated Reducer node, and a cryptographically verified **Secure Random Generator (SRG) Server**.
+A distributed betting platform with a **Java backend** (Master-Worker architecture) and an **Android frontend** (mobile client). The backend uses raw TCP sockets, MapReduce aggregation, consistent-hash routing, and a cryptographically verified Secure Random Generator (SRG).
 
 ---
 
-## System Architecture
-
-```
-  ┌───────────────┐      ┌───────────────┐
-  │   PlayerApp   │      │    Manager    │
-  │  (CLI Client) │      │ (Admin CLI)   │
-  └──────┬────────┘      └──────┬────────┘
-         │                      │  TCP / Java Serialization
-         └──────────┬───────────┘
-                    ▼
-        ┌───────────────────────┐
-        │         MASTER        │
-        │       Port: 4445      │
-        │  • Worker registry    │
-        │  • Consistent-hash    │
-        │    routing            │
-        │  • MapReduce dispatch │
-        └────────┬──────────────┘
-                 │ routes per routing key
-        ┌────────┴─────────┐
-        ▼                  ▼
-  ┌───────────┐     ┌───────────┐
-  │  Worker 1 │     │  Worker 2 │
-  │ Port:7001 │     │ Port:7002 │
-  │  gameMap  │     │  gameMap  │
-  │  balances │     │  balances │
-  └─────┬─────┘     └─────┬─────┘
-        │   MAP phase      │
-        └────────┬─────────┘
-                 ▼
-        ┌────────────────┐
-        │    REDUCER      │
-        │  Port: 6000    │
-        │  SEARCH reduce │
-        │  SUM_DOUBLE    │
-        │    reduce      │
-        └────────────────┘
-                 ▲
-        ┌────────┴────────┐
-        │   SRG Server    │
-        │  Port: 3000     │
-        │  Producer-      │
-        │  Consumer buf   │
-        │  SHA-256 verify │
-        └─────────────────┘
-```
-
----
-
-## Design Patterns
-
-### 1. MapReduce
-Operations that span all workers (search, stats) follow a two-phase pattern:
-
-**Map phase** — Master broadcasts to every Worker with a shared `jobId`. Each Worker filters/aggregates its local data and sends a partial result to the Reducer via `STORE_PARTIAL`.
-
-**Reduce phase** — Master asks the Reducer for `GET_RESULT`. The Reducer waits until all partial results for that `jobId` arrive, then merges them:
-- `SEARCH` reduce → deduplicates `Game` objects by name
-- `SUM_DOUBLE` reduce → sums `KeyValue<String, Double>` entries per key
-
-### 2. Consistent Hash Routing
-For commands that target a single Worker (`play`, `addGame`, `addBalance`, `rateGame`, etc.), the Master applies:
-
-```java
-int workerIndex = Math.floorMod(routingKey.hashCode(), workers.size());
-```
-
-The routing key is the **first element** of the payload (e.g. `gameName` for `play`/`addGame`, `playerId` for `addBalance`). This ensures the same entity always reaches the same Worker, keeping its local state consistent.
-
-### 3. Producer-Consumer (SRG Server)
-The `SRGServer` maintains a `RandomBuffer` (bounded blocking queue) per game secret. A background `RandomProducer` thread continuously fills the buffer with `SecureRandom` integers. Each `play` request consumes one number from the buffer. The Worker verifies the result by recomputing `SHA-256(randomNumber + secret)` and comparing it to the hash the SRG returned — ensuring tamper-proof randomness.
-
-### 4. Multi-threaded TCP Server
-Every server component (Master, Worker, Reducer, SRG) accepts connections in a `while(true)` loop and dispatches each one to a new `Thread`, achieving parallel request handling. Communication uses Java's `ObjectInputStream` / `ObjectOutputStream` for serialization.
-
----
-
-##  Technologies
-
-| What | Details |
-|------|---------|
-| Language | Java (JDK 11+) |
-| Networking | Raw TCP Sockets (`java.net`) |
-| Serialization | Java Object Serialization |
-| Cryptography | `MessageDigest` SHA-256, `SecureRandom` |
-| Concurrency | `synchronized` blocks, `wait/notifyAll` |
-| Configuration | `java.util.Properties` via `AppConfig` |
-| JSON parsing | Custom regex-based `GameJson` parser |
-| Build / IDE | IntelliJ IDEA (no Maven/Gradle) |
-| External libs | **None** — pure Java SE |
-
----
-
-## Project Structure
+## Repository Structure
 
 ```
 GameBet/
-├── src/
-│   └── GameBet/
-│       ├── Master.java          # Coordinator: routing, MapReduce dispatch
-│       ├── Worker.java          # Game logic, player balances, map phase
-│       ├── Reducer.java         # Partial result store + reduce phase
-│       ├── SRGServer.java       # Secure Random Generator (Producer-Consumer)
-│       ├── PlayerApp.java       # Player CLI client
-│       ├── Manager.java         # Admin CLI client
-│       ├── Game.java            # Game model (risk multipliers, jackpot)
-│       ├── Player.java          # Player model
-│       ├── AppConfig.java       # .properties config loader
-│       ├── GameJson.java        # Regex-based JSON → Game parser
-│       ├── KeyValue.java        # Generic pair used in MapReduce
-│       ├── SearchRequest.java   # Filter object (stars, risk, betCategory)
-│       └── SRGResponse.java     # SRG response (randomNumber + SHA-256 hash)
-├── config/
-│   ├── config.properties        # Shared config (ports, hosts, worker count)
-│   ├── worker1.properties       # Worker 1 — port 7001
-│   └── worker2.properties       # Worker 2 — port 7002
+├── backend/                   ← Java distributed server system
+│   ├── src/GameBet/
+│   │   ├── Master.java
+│   │   ├── Worker.java
+│   │   ├── Reducer.java
+│   │   ├── SRGServer.java
+│   │   ├── PlayerApp.java     ← CLI client (alternative to Android)
+│   │   ├── Manager.java       ← Admin CLI
+│   │   ├── Game.java
+│   │   ├── Player.java
+│   │   ├── AppConfig.java
+│   │   ├── GameJson.java
+│   │   ├── KeyValue.java
+│   │   ├── SearchRequest.java
+│   │   └── SRGResponse.java
+│   └── config/
+│       ├── config.properties
+│       ├── worker1.properties
+│       └── worker2.properties
+│
+├── frontend/                  ← Android Studio project (mobile client)
+│   └── app/src/main/
+│       ├── java/
+│       │   ├── com/example/GameBetApp/
+│       │   │   ├── MainActivity.java
+│       │   │   ├── GamesActivity.java
+│       │   │   ├── GameDetailsActivity.java
+│       │   │   ├── SearchActivity.java
+│       │   │   ├── GameAdapter.java
+│       │   │   └── MasterConnection.java
+│       │   └── GameBet/           ← shared serializable model classes
+│       │       ├── Game.java
+│       │       ├── Player.java
+│       │       ├── SearchRequest.java
+│       │       └── SRGResponse.java
+│       └── res/
+│           ├── layout/
+│           │   ├── activity_main.xml
+│           │   ├── activity_games.xml
+│           │   ├── activity_game_details.xml
+│           │   ├── activity_search.xml
+│           │   └── item_game.xml
+│           └── drawable/
+│               ├── lucky7.png
+│               └── test1.png
+│
 ├── .gitignore
 └── README.md
 ```
 
 ---
 
-##  Configuration
+## System Architecture
 
-### `config.properties` (used by Master, Reducer, SRG, Manager, PlayerApp)
+```
+  ┌─────────────────────┐      ┌───────────────┐
+  │   Android App        │      │    Manager    │
+  │  MainActivity        │      │  (Admin CLI)  │
+  │  GamesActivity       │      └──────┬────────┘
+  │  GameDetailsActivity │             │
+  │  SearchActivity      │             │ TCP / Java Serialization
+  └──────────┬───────────┘             │
+             │  10.0.2.2:4445          │
+             └──────────┬──────────────┘
+                        ▼
+            ┌───────────────────────┐
+            │         MASTER        │
+            │       Port: 4445      │
+            │  • Worker registry    │
+            │  • Consistent-hash    │
+            │    routing            │
+            │  • MapReduce dispatch │
+            └────────┬──────────────┘
+                     │
+            ┌────────┴─────────┐
+            ▼                  ▼
+      ┌───────────┐     ┌───────────┐
+      │  Worker 1 │     │  Worker 2 │
+      │ Port:7001 │     │ Port:7002 │
+      │  gameMap  │     │  gameMap  │
+      │  balances │     │  balances │
+      └─────┬─────┘     └─────┬─────┘
+            │   MAP phase      │
+            └────────┬─────────┘
+                     ▼
+            ┌────────────────┐
+            │    REDUCER     │
+            │  Port: 6000    │
+            │ SEARCH reduce  │
+            │ SUM_DOUBLE     │
+            └────────────────┘
+
+            ┌────────────────┐
+            │   SRG Server   │
+            │  Port: 3000    │
+            │ Producer-      │
+            │ Consumer buf   │
+            │ SHA-256 verify │
+            └────────────────┘
+```
+
+---
+
+## Android Frontend — Screens
+
+| Screen | File | Description |
+|--------|------|-------------|
+| Main Menu | `MainActivity` | Add balance, navigate to games/search |
+| Available Games | `GamesActivity` | ListView with all active games + logo |
+| Game Details | `GameDetailsActivity` | Full game info, Play button, Rate button |
+| Search | `SearchActivity` | Filter by min stars, risk (Spinner), bet category (Spinner) |
+
+### Key implementation detail
+The Android app and Java backend share the **same serialized model classes** (`Game`, `SearchRequest`, `SRGResponse`) under the `GameBet` package. This allows direct Java Object Serialization over TCP — no REST API or JSON conversion needed.
+
+Communication is handled by `MasterConnection.java`, which opens a TCP socket, writes the command + payload with `ObjectOutputStream`, and reads the response with `ObjectInputStream` — identical to the CLI `PlayerApp`.
+
+> **Emulator note:** `10.0.2.2` is Android's special alias for the host machine's `localhost`. For a real device on the same LAN, replace with the Master's actual IP.
+
+---
+
+## Backend Design Patterns
+
+### 1. MapReduce
+Operations spanning all workers (search, stats) follow a two-phase pattern:
+
+**Map phase** — Master broadcasts to every Worker with a shared `jobId`. Each Worker filters/aggregates its local data and sends a partial result to the Reducer via `STORE_PARTIAL`.
+
+**Reduce phase** — Master requests `GET_RESULT` from the Reducer, which waits for all partial results then merges:
+- `SEARCH` → deduplicates `Game` objects by name
+- `SUM_DOUBLE` → sums `KeyValue<String, Double>` entries per key
+
+### 2. Consistent Hash Routing
+For single-worker commands (`play`, `addGame`, `addBalance`, etc.):
+```java
+int workerIndex = Math.floorMod(routingKey.hashCode(), workers.size());
+```
+The routing key is the first element of the payload (e.g. `gameName`, `playerId`), ensuring the same entity always reaches the same Worker.
+
+### 3. Producer-Consumer (SRG Server)
+`SRGServer` maintains a `RandomBuffer` (bounded blocking queue) per game secret. A background `RandomProducer` thread fills it with `SecureRandom` integers. Each `play` request consumes one number, and the Worker verifies it by recomputing `SHA-256(randomNumber + secret)`.
+
+### 4. Multi-threaded TCP Server
+Every server accepts connections in a `while(true)` loop and dispatches each to a new `Thread`. Communication uses Java's `ObjectInputStream` / `ObjectOutputStream`.
+
+---
+
+## Technologies
+
+| What | Details |
+|------|---------|
+| Backend language | Java (JDK 11+) |
+| Frontend | Android (Java, minSdk 8+) |
+| Networking | Raw TCP Sockets (`java.net`) |
+| Serialization | Java Object Serialization |
+| Cryptography | `MessageDigest` SHA-256, `SecureRandom` |
+| Concurrency | `synchronized`, `wait/notifyAll`, `Thread` |
+| Configuration | `java.util.Properties` via `AppConfig` |
+| JSON parsing | Custom regex-based `GameJson` parser |
+| Build (backend) | IntelliJ IDEA (no Maven/Gradle) |
+| Build (frontend) | Android Studio |
+| External libraries | **None** — pure Java SE + Android SDK |
+
+---
+
+## Configuration
+
+### `config.properties`
 ```properties
 master.host=localhost
 master.port=4445
-
 reducer.host=localhost
 reducer.port=6000
-
 srg.host=localhost
 srg.port=3000
 srg.buffer.size=10
-
 workers.count=2
 ```
 
 ### `worker1.properties` / `worker2.properties`
 ```properties
-worker.port=7001          # 7002 for worker 2
+worker.port=7001        # 7002 for worker 2
 master.host=localhost
 master.port=4445
-reducer.host=localhost
-reducer.port=6000
-srg.host=localhost
-srg.port=3000
 ```
 
->  For multi-machine setup, replace `localhost` with the actual LAN IP of each machine. See [Multi-Machine Setup](#multi-machine-setup) below.
+> For multi-machine setup, replace `localhost` with the actual LAN IP. See [Multi-Machine Setup](#multi-machine-setup).
 
 ---
 
 ## How to Run
 
-Start components **in this exact order** (each as a separate Run Configuration in IntelliJ):
+### Backend — Start in this order
 
-| Step | Class | Config arg |
-|------|-------|------------|
+| Step | Class | Config |
+|------|-------|--------|
 | 1 | `SRGServer` | `config/config.properties` |
 | 2 | `Reducer` | `config/config.properties` |
 | 3 | `Master` | `config/config.properties` |
-| 4 | `Worker` ×2 | `config/worker1.properties`, `config/worker2.properties` |
-| 5 | `PlayerApp` | `config/config.properties` |
-| 5 | `Manager` | `config/config.properties` (optional, admin only) |
+| 4 | `Worker` ×2 | `worker1.properties`, `worker2.properties` |
+| 5 | `PlayerApp` or Android app | `config/config.properties` |
 
-### IntelliJ Run Configuration
-For each class: `Run → Edit Configurations → Program arguments` → enter the path to its `.properties` file.
+Each class uses `args[0]` as the config file path. Set this in IntelliJ via `Run → Edit Configurations → Program arguments`.
+
+### Frontend — Android App
+1. Open the `frontend/` folder in **Android Studio**
+2. Make sure the backend Master is running
+3. Run on emulator — it connects to `10.0.2.2:4445` (host machine localhost)
+4. For a real device, change `MASTER_HOST` in each Activity to the Master's LAN IP
 
 ---
 
-##  Multi-Machine Setup
+## Multi-Machine Setup
 
-To distribute components across different physical machines on the same LAN:
+1. Run `ipconfig` (Windows) on each machine to find its IPv4 address
+2. Update all `.properties` files with the correct IPs
+3. Open firewall ports:
 
-1. Run `ipconfig` (Windows) on each machine to find its IPv4 address.
-2. Update all `.properties` files so each `*.host` points to the correct machine IP.
-3. Open the required firewall ports on each machine:
+| Machine | Ports |
+|---------|-------|
+| Master | 4445 |
+| Reducer | 6000 |
+| SRG | 3000 |
+| Worker 1 | 7001 |
+| Worker 2 | 7002 |
 
-| Machine | Open ports |
-|---------|-----------|
-| Master machine | 4445 |
-| Reducer machine | 6000 |
-| SRG machine | 3000 |
-| Worker 1 machine | 7001 |
-| Worker 2 machine | 7002 |
-
-4. Start components in the order above.
-5. Verify connectivity: `ping <target-ip>` from each machine before starting.
+4. For Android on a real device, update `MASTER_HOST` in `MainActivity`, `GamesActivity`, `GameDetailsActivity`, `SearchActivity`
 
 ---
 
 ## Game Mechanics
 
 ### Risk Multipliers
-Each game has a `riskLevel` (`low` / `medium` / `high`) that determines payout multipliers applied to the bet amount:
-
 | Index (rnd % 10) | Low | Medium | High |
 |-----------------|-----|--------|------|
 | 0–2 | 0.0× | 0.0× | 0.0× |
@@ -213,42 +252,16 @@ Each game has a `riskLevel` (`low` / `medium` / `high`) that determines payout m
 | 8 | 2.0× | 2.5× | 2.0× |
 | 9 | 2.5× | 3.5× | 6.5× |
 
-**Jackpot**: triggered when `rnd % 100 == 0` → multipliers 10×, 20×, 40× for low/medium/high.
+**Jackpot:** triggered when `rnd % 100 == 0` → 10×, 20×, 40× for low/medium/high.
 
 ### Bet Categories
-Derived automatically from `minBet`:
 - `$` — minBet < 1.0
 - `$$` — minBet 1.0–4.99
 - `$$$` — minBet ≥ 5.0
 
 ---
 
-## CLI Menus
-
-### PlayerApp
-```
-1. Search games       (filter by stars, risk, bet category)
-2. View available games
-3. Play game
-4. Rate game          (1–5 stars)
-5. Add balance
-6. View last search results
-0. Exit
-```
-
-### Manager (Admin)
-```
-1. Add Game           (manual input)
-2. Add Game from JSON (load .json file)
-3. Remove Game        (soft-deactivate)
-4. Update Game Risk
-5. Show game/provider stats  (MapReduce aggregate)
-6. Show player stats         (MapReduce aggregate)
-0. Exit
-```
-
----
-
-##  Authors
+## Authors
 
 Developed as a university assignment  
+AUEB

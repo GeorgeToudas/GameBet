@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="GameBet"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp"/>
+
+    <Button
+        android:id="@+id/btnViewGames"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="View Available Games"
+        android:layout_marginBottom="16dp"/>
+
+    <Button
+        android:id="@+id/btnSearchGames"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Search Games"
+        android:layout_marginBottom="16dp"/>
+
+    <EditText
+        android:id="@+id/etBalance"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Amount to add"
+        android:inputType="numberDecimal"
+        android:layout_marginBottom="16dp"/>
+
+    <Button
+        android:id="@+id/btnAddBalance"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Add Balance"/>
+
+</LinearLayout>
